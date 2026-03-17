@@ -32,8 +32,3 @@ buildscript {
         mavenCentral()
     }
 }
-
-android {
-    ndkVersion = "27.0.12077973"
-    // ... le reste de ta configuration Android
-}
