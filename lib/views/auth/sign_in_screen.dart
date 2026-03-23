@@ -5,6 +5,7 @@ import 'package:bookshare/components/default_button.dart';
 import 'package:bookshare/components/default_form_field.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:bookshare/views/auth/home/main_wrapper.dart';
 import 'package:bookshare/views/auth/sign_up_screen.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -40,9 +41,10 @@ class _SignInScreenState extends State<SignInScreen> {
         await _auth.signInWithEmailAndPassword(email: email, password: password);
 
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Signed in successfully.')));
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainWrapper()),
+          (route) => false,
+        );
       } on FirebaseAuthException catch (e) {
         if (!mounted) return;
         String message = 'Sign in failed. Please try again.';
