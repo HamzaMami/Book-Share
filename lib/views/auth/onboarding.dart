@@ -85,59 +85,70 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             itemBuilder: (context, index) {
               final bool isLastSlide = index == onboardingData.length - 1;
 
-              return Column(
-                children: [
-                  const SizedBox(height: 60),
-                  // Full width image with 0 padding
-                  Image.asset(
-                    onboardingData[index]['image']!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-
-                  ),
-                  Spacer(),
-                  Padding(
-                    padding: EdgeInsetsGeometry.only(left: 16.0, right: 16.0,bottom: 65),
-                    child: Column(
+              return SafeArea(
+                bottom: false,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Column(
                       children: [
-                        const SizedBox(height: 30),
-                        Text(
-                          onboardingData[index]['title']!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                        Expanded(
+                          flex: 6,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Image.asset(
+                              onboardingData[index]['image']!,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          onboardingData[index]['description']!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.black,
-                          ),
-                        ),
-                        if (isLastSlide) const SizedBox(height: 24),
-                        if (isLastSlide)
-                          DefaultButton(
-                            text: 'Get Started Now',
-                            pressed: () {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const SignUpScreen(),
+                        Expanded(
+                          flex: 4,
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 78),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  onboardingData[index]['title']!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                  ),
                                 ),
-                              );
-                            },
-                            activated: true,
-                            loading: false,
+                                const SizedBox(height: 12),
+                                Text(
+                                  onboardingData[index]['description']!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                                if (isLastSlide) const SizedBox(height: 20),
+                                if (isLastSlide)
+                                  DefaultButton(
+                                    text: 'Get Started Now',
+                                    pressed: () {
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => const SignUpScreen(),
+                                        ),
+                                      );
+                                    },
+                                    activated: true,
+                                    loading: false,
+                                  ),
+                              ],
+                            ),
                           ),
+                        ),
                       ],
-                    ),
-                  ),
-                ],
+                    );
+                  },
+                ),
               );
             },
           ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:bookshare/views/auth/home/home_page.dart';
 import 'package:bookshare/views/admin/role_management_screen.dart';
 import 'package:bookshare/services/role_management_service.dart';
-import 'package:bookshare/models/user_role.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class MainWrapperWithRoles extends StatefulWidget {
@@ -16,41 +15,29 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
   int _selectedIndex = 0;
   final RoleManagementService _roleService = RoleManagementService();
 
-  // These are the views that will change when you tap the bar
   late final List<Widget> _pages = [
-    const HomePage(),                                       // Index 0
-    const Center(child: Text("My Books Content")),         // Index 1
-    const Center(child: Text("Favorites Content")),        // Index 2
-    const Center(child: Text("Events Content")),           // Index 3
+    const HomePage(),
+    const Center(child: Text("My Books Content")),
+    const Center(child: Text("Favorites Content")),
+    const Center(child: Text("Events Content")),
   ];
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
   String _getTitle(int index) {
     switch (index) {
-      case 0:
-        return 'Home';
-      case 1:
-        return 'My Books';
-      case 2:
-        return 'Favorites';
-      case 3:
-        return 'Events';
-      default:
-        return 'BookShare';
+      case 0: return 'Home';
+      case 1: return 'My Books';
+      case 2: return 'Favorites';
+      case 3: return 'Events';
+      default: return 'BookShare';
     }
   }
 
-  // ============================================
-  // ADMIN MENU HANDLING
-  // ============================================
   void _handleAdminMenuPress() async {
     bool isAdmin = await _roleService.isCurrentUserAdmin();
-    
+    if (!mounted) return;
+
     if (!isAdmin) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You do not have admin access.')),
@@ -58,11 +45,9 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
       return;
     }
 
-    if (!mounted) return;
-    
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
+      builder: (sheetContext) => Container(
         color: Colors.white,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -71,12 +56,10 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
               leading: const Icon(Icons.people),
               title: const Text('Manage Users & Roles'),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const RoleManagementScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const RoleManagementScreen()),
                 );
               },
             ),
@@ -84,8 +67,7 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
               leading: const Icon(Icons.analytics),
               title: const Text('View Analytics'),
               onTap: () {
-                Navigator.pop(context);
-                // TODO: Navigate to analytics screen
+                Navigator.pop(sheetContext);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Analytics - Coming Soon')),
                 );
@@ -95,8 +77,7 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
               leading: const Icon(Icons.settings),
               title: const Text('Settings'),
               onTap: () {
-                Navigator.pop(context);
-                // TODO: Navigate to settings screen
+                Navigator.pop(sheetContext);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Settings - Coming Soon')),
                 );
@@ -106,7 +87,7 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
             ListTile(
               leading: const Icon(Icons.close),
               title: const Text('Close'),
-              onTap: () => Navigator.pop(context),
+              onTap: () => Navigator.pop(sheetContext),
             ),
           ],
         ),
@@ -116,7 +97,6 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
 
   @override
   Widget build(BuildContext context) {
-    final bool canPop = Navigator.of(context).canPop();
     final currentUser = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
@@ -124,19 +104,12 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
         elevation: 0,
         backgroundColor: Colors.white,
         automaticallyImplyLeading: false,
-        leading: canPop
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-                onPressed: () => Navigator.of(context).maybePop(),
-              )
-            : null,
         title: Text(
           _getTitle(_selectedIndex),
           style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         actions: [
-          // Admin Menu Button (shown only for admins)
           FutureBuilder<bool>(
             future: _roleService.isCurrentUserAdmin(),
             builder: (context, snapshot) {
@@ -150,58 +123,46 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
               return const SizedBox.shrink();
             },
           ),
-          // Regular Menu Button
           IconButton(
             icon: const Icon(Icons.menu, color: Colors.black),
             onPressed: () {
-              // Show user menu
               showModalBottomSheet(
                 context: context,
-                builder: (context) => Container(
+                builder: (sheetContext) => Container(
                   color: Colors.white,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // User Info
-                      FutureBuilder<String>(
-                        future: Future.value(currentUser?.displayName ?? 'User'),
-                        builder: (context, snapshot) {
-                          return Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              children: [
-                                CircleAvatar(
-                                  radius: 30,
-                                  child: Text(
-                                    (currentUser?.displayName ?? 'U')[0].toUpperCase(),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  snapshot.data ?? 'User',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  currentUser?.email ?? '',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            CircleAvatar(
+                              radius: 30,
+                              child: Text(
+                                (currentUser?.displayName ?? 'U')[0].toUpperCase(),
+                              ),
                             ),
-                          );
-                        },
+                            const SizedBox(height: 8),
+                            Text(
+                              currentUser?.displayName ?? 'User',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              currentUser?.email ?? '',
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
                       ),
                       const Divider(),
-                      // User Role Display
                       FutureBuilder<String>(
                         future: _roleService
                             .getUserRole(currentUser?.uid ?? '')
-                            .then((role) => role.value),
+                            .then((role) => role.name[0].toUpperCase() + role.name.substring(1)),
                         builder: (context, snapshot) {
                           return ListTile(
                             leading: const Icon(Icons.badge),
@@ -214,29 +175,23 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
                       ListTile(
                         leading: const Icon(Icons.settings),
                         title: const Text('Settings'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          // TODO: Navigate to settings
-                        },
+                        onTap: () => Navigator.pop(sheetContext),
                       ),
                       ListTile(
                         leading: const Icon(Icons.help),
                         title: const Text('Help & Support'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          // TODO: Navigate to help
-                        },
+                        onTap: () => Navigator.pop(sheetContext),
                       ),
                       ListTile(
                         leading: const Icon(Icons.logout, color: Colors.red),
                         title: const Text('Logout', style: TextStyle(color: Colors.red)),
                         onTap: () async {
-                          Navigator.pop(context);
+                          Navigator.pop(sheetContext);
                           await FirebaseAuth.instance.signOut();
                           if (mounted) {
                             Navigator.of(context).pushNamedAndRemoveUntil(
-                              '/', // Replace with your sign-in route name
-                              (route) => false,
+                              '/signin',
+                                  (route) => false,
                             );
                           }
                         },
@@ -285,4 +240,3 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
     );
   }
 }
-
