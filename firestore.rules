@@ -1,0 +1,130 @@
+// Firestore Security Rules for BookShare
+// This provides role-based access control for the application
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/Users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
+    function isMember() {
+      return isSignedIn() && get(/databases/$(database)/documents/Users/$(request.auth.uid)).data.role == 'Member';
+    }
+
+    function isVisitor() {
+      return isSignedIn() && get(/databases/$(database)/documents/Users/$(request.auth.uid)).data.role == 'Visitor';
+    }
+
+    function isActiveUser() {
+      return isSignedIn() && get(/databases/$(database)/documents/Users/$(request.auth.uid)).data.isActive == true;
+    }
+
+    function isOwnDocument() {
+      return request.auth.uid == resource.data.uid;
+    }
+
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
+
+    match /Users/{userId} {
+      // Read: Users can read their own profile, Admins can read all
+      allow read: if isActiveUser() && (isOwnDocument() || isAdmin());
+
+      // Create: Only during sign-up (allow unauthenticated)
+      allow create: if request.auth.uid == userId &&
+                       request.resource.data.role == 'Member' &&
+                       request.resource.data.isActive == true;
+
+      // Update: Users can update their own profile, Admins can update anyone
+      allow update: if isActiveUser() &&
+                       (isOwnDocument() || isAdmin()) &&
+                       (resource.data.role == request.resource.data.role || isAdmin());
+
+      // Delete: Only Admins can delete users
+      allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // BOOKS COLLECTION
+    // ============================================
+
+    match /Books/{bookId} {
+      // Read: Everyone can read (public listing)
+      allow read: if true;
+
+      // Create: Members and Admins can add books
+      allow create: if isActiveUser() && (isMember() || isAdmin()) &&
+                       request.resource.data.ownerId == request.auth.uid;
+
+      // Update: Owner or Admin can edit
+      allow update: if isActiveUser() &&
+                       (isAdmin() || (isMember() && resource.data.ownerId == request.auth.uid));
+
+      // Delete: Owner or Admin can delete
+      allow delete: if isActiveUser() &&
+                       (isAdmin() || (isMember() && resource.data.ownerId == request.auth.uid));
+    }
+
+    // ============================================
+    // FAVORITES COLLECTION
+    // ============================================
+
+    match /Favorites/{userId} {
+      // Users can only read/write their own favorites
+      allow read, write: if isActiveUser() && request.auth.uid == userId;
+    }
+
+    // ============================================
+    // EVENTS COLLECTION
+    // ============================================
+
+    match /Events/{eventId} {
+      // Read: Everyone can read events
+      allow read: if true;
+
+      // Create: Members and Admins can create events
+      allow create: if isActiveUser() && (isMember() || isAdmin()) &&
+                       request.resource.data.organizerId == request.auth.uid;
+
+      // Update: Organizer or Admin can edit
+      allow update: if isActiveUser() &&
+                       (isAdmin() || (isMember() && resource.data.organizerId == request.auth.uid));
+
+      // Delete: Organizer or Admin can delete
+      allow delete: if isActiveUser() &&
+                       (isAdmin() || (isMember() && resource.data.organizerId == request.auth.uid));
+    }
+
+    // ============================================
+    // ROLE_CHANGE_LOGS COLLECTION (for auditing)
+    // ============================================
+
+    match /RoleChangeLogs/{logId} {
+      // Only Admins can read logs
+      allow read: if isAdmin();
+
+      // Automatic creation by backend (Firebase Cloud Functions)
+      allow create: if false; // Handle via Cloud Functions
+
+      allow update, delete: if false;
+    }
+
+    // Catch-all: Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

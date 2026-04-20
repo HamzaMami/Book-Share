@@ -48,3 +48,4 @@ app.*.map.json
 # Sensitive files
 **/google-services.json
 **/GoogleService-Info.plist
+README_ROLES.md

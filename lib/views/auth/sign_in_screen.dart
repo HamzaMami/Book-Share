@@ -3,9 +3,10 @@
 
 import 'package:bookshare/components/default_button.dart';
 import 'package:bookshare/components/default_form_field.dart';
+import 'package:bookshare/services/role_management_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:bookshare/views/auth/home/main_wrapper.dart';
+import 'package:bookshare/views/auth/home/main_wrapper_with_roles.dart';
 import 'package:bookshare/views/auth/sign_up_screen.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final RoleManagementService _roleService = RoleManagementService();
   bool _isLoading = false;
   String emailValue = "";
   String passwordValue = "";
@@ -38,11 +40,27 @@ class _SignInScreenState extends State<SignInScreen> {
       setState(() => _isLoading = true);
 
       try {
-        await _auth.signInWithEmailAndPassword(email: email, password: password);
-
+        final userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
+        
         if (!mounted) return;
+        
+        // Update last sign-in time
+        if (userCredential.user != null) {
+          await _roleService.updateLastSignIn(userCredential.user!.uid);
+          
+          // Check if user account is active
+          final userData = await _roleService.getUserById(userCredential.user!.uid);
+          if (userData != null && !userData.isActive) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Your account has been deactivated. Please contact support.')),
+            );
+            await _auth.signOut();
+            return;
+          }
+        }
+        
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainWrapper()),
+          MaterialPageRoute(builder: (_) => const MainWrapperWithRoles()),
           (route) => false,
         );
       } on FirebaseAuthException catch (e) {
