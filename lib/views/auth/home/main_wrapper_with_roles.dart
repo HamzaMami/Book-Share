@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:bookshare/views/auth/home/home_page.dart';
+import 'package:bookshare/views/books/books_page.dart';
 import 'package:bookshare/views/admin/role_management_screen.dart';
 import 'package:bookshare/services/role_management_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import '../../books/my_books_page.dart';
 
 class MainWrapperWithRoles extends StatefulWidget {
   const MainWrapperWithRoles({super.key});
@@ -17,8 +20,8 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
 
   late final List<Widget> _pages = [
     const HomePage(),
-    const Center(child: Text("My Books Content")),
-    const Center(child: Text("Favorites Content")),
+    const BooksPage(),
+    const MyBooksPage(),
     const Center(child: Text("Events Content")),
   ];
 
@@ -27,8 +30,8 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
   String _getTitle(int index) {
     switch (index) {
       case 0: return 'Home';
-      case 1: return 'My Books';
-      case 2: return 'Favorites';
+      case 1: return 'Books';
+      case 2: return 'My Books';
       case 3: return 'Events';
       default: return 'BookShare';
     }
@@ -223,12 +226,12 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
           BottomNavigationBarItem(
             icon: Icon(Icons.book_outlined),
             activeIcon: Icon(Icons.book),
-            label: 'My Books',
+            label: 'Books',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.favorite_outline),
-            activeIcon: Icon(Icons.favorite),
-            label: 'Favorites',
+            icon: Icon(Icons.bookmark_outline),
+            activeIcon: Icon(Icons.bookmark),
+            label: 'My Books',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.event_outlined),
