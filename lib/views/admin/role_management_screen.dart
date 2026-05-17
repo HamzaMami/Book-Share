@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:bookshare/models/user.dart';
 import 'package:bookshare/models/user_role.dart';
 import 'package:bookshare/services/role_management_service.dart';
-import 'package:bookshare/components/default_button.dart';
 
 class RoleManagementScreen extends StatefulWidget {
   const RoleManagementScreen({super.key});

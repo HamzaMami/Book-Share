@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:bookshare/views/auth/home/home_page.dart';
 import 'package:bookshare/views/books/books_page.dart';
+import 'package:bookshare/views/books/my_books_page.dart';
+import 'package:bookshare/views/books/add_book_screen.dart';
 import 'package:bookshare/views/admin/role_management_screen.dart';
+import 'package:bookshare/views/admin/loan_requests_screen.dart';
+import 'package:bookshare/views/admin/loans_view_screen.dart';
 import 'package:bookshare/services/role_management_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
-import '../../books/my_books_page.dart';
 
 class MainWrapperWithRoles extends StatefulWidget {
   const MainWrapperWithRoles({super.key});
@@ -16,14 +18,33 @@ class MainWrapperWithRoles extends StatefulWidget {
 
 class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
   int _selectedIndex = 0;
+  String _booksSearchQuery = '';
   final RoleManagementService _roleService = RoleManagementService();
 
-  late final List<Widget> _pages = [
-    const HomePage(),
-    const BooksPage(),
-    const MyBooksPage(),
-    const Center(child: Text("Events Content")),
-  ];
+  List<Widget> get _pages => [
+        HomePage(
+          onSearchBooks: (query) {
+            setState(() {
+              _booksSearchQuery = query;
+              _selectedIndex = 1;
+            });
+          },
+          onOpenBooks: () => _onItemTapped(1),
+          onOpenMyLibrary: () => _onItemTapped(2),
+          onAddBook: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddBookScreen()),
+            );
+          },
+        ),
+        BooksPage(
+          key: ValueKey<String>(_booksSearchQuery),
+          initialSearchQuery: _booksSearchQuery,
+        ),
+        const MyBooksPage(),
+        const Center(child: Text("Events Content")),
+      ];
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
@@ -63,6 +84,30 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const RoleManagementScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.swap_horiz, color: Color(0xFF007AFF)),
+              title: const Text('Borrow Requests'),
+              subtitle: const Text('Pending requests from members'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoanRequestsScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.library_books, color: Color(0xFF34C759)),
+              title: const Text('Currently Loaned'),
+              subtitle: const Text('Books borrowed by members'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoansViewScreen()),
                 );
               },
             ),
@@ -190,9 +235,10 @@ class _MainWrapperWithRolesState extends State<MainWrapperWithRoles> {
                         title: const Text('Logout', style: TextStyle(color: Colors.red)),
                         onTap: () async {
                           Navigator.pop(sheetContext);
+                          final navigator = Navigator.of(context);
                           await FirebaseAuth.instance.signOut();
                           if (mounted) {
-                            Navigator.of(context).pushNamedAndRemoveUntil(
+                            navigator.pushNamedAndRemoveUntil(
                               '/signin',
                                   (route) => false,
                             );

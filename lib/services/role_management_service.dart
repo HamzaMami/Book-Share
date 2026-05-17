@@ -12,9 +12,7 @@ class RoleManagementService {
       await _db.collection('Users').doc(uid).update({
         'role': role.value,
       });
-      print('Role ${role.value} assigned to user $uid');
     } catch (e) {
-      print("Error assigning role: $e");
       rethrow;
     }
   }
@@ -29,7 +27,6 @@ class RoleManagementService {
       }
       return UserRole.visitor; // Default to visitor if user not found
     } catch (e) {
-      print("Error getting user role: $e");
       return UserRole.visitor;
     }
   }
@@ -43,7 +40,6 @@ class RoleManagementService {
       }
       return null;
     } catch (e) {
-      print("Error getting user: $e");
       return null;
     }
   }
@@ -54,7 +50,6 @@ class RoleManagementService {
       final role = await getUserRole(uid);
       return role.hasPermission(permission);
     } catch (e) {
-      print("Error checking permission: $e");
       return false;
     }
   }
@@ -71,7 +66,6 @@ class RoleManagementService {
           .map((doc) => User.fromFirestore(doc.data(), doc.id))
           .toList();
     } catch (e) {
-      print("Error fetching users by role: $e");
       return [];
     }
   }
@@ -83,7 +77,7 @@ class RoleManagementService {
         'lastSignIn': DateTime.now(),
       });
     } catch (e) {
-      print("Error updating last sign-in: $e");
+      // Silent fail for non-critical operation
     }
   }
 
@@ -94,7 +88,6 @@ class RoleManagementService {
         'isActive': false,
       });
     } catch (e) {
-      print("Error deactivating user: $e");
       rethrow;
     }
   }
@@ -106,7 +99,6 @@ class RoleManagementService {
         'isActive': true,
       });
     } catch (e) {
-      print("Error activating user: $e");
       rethrow;
     }
   }
@@ -135,7 +127,6 @@ class RoleManagementService {
       final role = await getUserRole(currentUser.uid);
       return role == UserRole.admin;
     } catch (e) {
-      print("Error checking if user is admin: $e");
       return false;
     }
   }

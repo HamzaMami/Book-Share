@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:bookshare/models/book.dart';
-import 'package:bookshare/services/Book_service.dart';
+import 'package:bookshare/services/book_service.dart';
+import 'package:bookshare/services/loan_request_service.dart';
 import 'package:bookshare/services/role_management_service.dart';
-
 
 class BookDetailScreen extends StatefulWidget {
   final Book book;
@@ -15,14 +16,56 @@ class BookDetailScreen extends StatefulWidget {
 
 class _BookDetailScreenState extends State<BookDetailScreen> {
   final _bookService = BookService();
+  final _loanService = LoanRequestService();
   final _roleService = RoleManagementService();
   bool _isLoading = false;
+  bool _hasPendingRequest = false;
+  bool _isReservedByUser = false;
+  int? _reservationPosition;
+  int _reservationCount = 0;
   late Book _book;
 
   @override
   void initState() {
     super.initState();
     _book = widget.book;
+    _checkPendingRequest();
+    _loadReservations();
+  }
+
+  Future<void> _checkPendingRequest() async {
+    final has = await _loanService.hasPendingRequest(_book.id);
+    if (mounted) setState(() => _hasPendingRequest = has);
+  }
+
+  Future<void> _reloadBook() async {
+    final updated = await _bookService.getBook(_book.id);
+    if (updated != null && mounted) setState(() => _book = updated);
+  }
+
+  Future<void> _loadReservations() async {
+    try {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      final bookRef = FirebaseFirestore.instance.collection('Books').doc(_book.id);
+      final snapshot = await bookRef.collection('reservations').orderBy('reservedAt').get();
+      final docs = snapshot.docs;
+      int pos = -1;
+      for (int i = 0; i < docs.length; i++) {
+        final uid = docs[i].data()['userId']?.toString();
+        if (uid != null && uid == currentUid) {
+          pos = i;
+          break;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _reservationCount = docs.length;
+        _reservationPosition = pos >= 0 ? pos : null;
+        _isReservedByUser = _reservationPosition != null;
+      });
+    } catch (_) {
+      // ignore errors for now
+    }
   }
 
   Color _statusColor(BookStatus s) {
@@ -33,20 +76,21 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     }
   }
 
-  Future<void> _handleBorrow() async {
+  Future<void> _handleRequestBorrow() async {
     setState(() => _isLoading = true);
     try {
-      await _bookService.borrowBook(_book.id);
+      await _loanService.requestBorrow(_book);
       if (!mounted) return;
+      setState(() => _hasPendingRequest = true);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Book borrowed! Due in 14 days.')),
+        const SnackBar(
+          content: Text('Borrow request sent! Waiting for admin approval.'),
+          backgroundColor: Color(0xFF34C759),
+        ),
       );
-      Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -60,12 +104,30 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Book reserved! You will be notified when available.')),
       );
+      await _loadReservations();
+      await _reloadBook();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleBorrowNow() async {
+    setState(() => _isLoading = true);
+    try {
+      await _bookService.borrowBook(_book.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have borrowed the book.')),
+      );
+      await _reloadBook();
+      await _loadReservations();
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -82,9 +144,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -114,9 +174,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -131,7 +189,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       body: CustomScrollView(
         slivers: [
-          // App bar with cover
           SliverAppBar(
             expandedHeight: 280,
             pinned: true,
@@ -141,7 +198,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             actions: [
-              // Admin delete button
               FutureBuilder<bool>(
                 future: _roleService.isCurrentUserAdmin(),
                 builder: (ctx, snap) {
@@ -152,18 +208,22 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   );
                 },
               ),
+              IconButton(
+                icon: const Icon(Icons.list, color: Colors.black),
+                onPressed: () => _showReservationQueue(),
+              ),
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 color: const Color(0xFFEAF2FF),
                 child: _book.coverUrl.isNotEmpty
                     ? Image.network(_book.coverUrl, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Center(
-                          child: Icon(Icons.book, size: 80, color: Color(0xFF007AFF)),
-                        ))
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: Icon(Icons.book, size: 80, color: Color(0xFF007AFF)),
+                    ))
                     : const Center(
-                        child: Icon(Icons.book, size: 80, color: Color(0xFF007AFF)),
-                      ),
+                  child: Icon(Icons.book, size: 80, color: Color(0xFF007AFF)),
+                ),
               ),
             ),
           ),
@@ -174,7 +234,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Status badge
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
@@ -191,26 +250,13 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // Title
-                  Text(
-                    _book.title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
+                  Text(_book.title,
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
-
-                  // Author
-                  Text(
-                    _book.author,
-                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-                  ),
+                  Text(_book.author,
+                      style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
                   const SizedBox(height: 8),
 
-                  // Genre chip
                   if (_book.genre.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -218,10 +264,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(
-                        _book.genre,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                      ),
+                      child: Text(_book.genre,
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
                     ),
 
                   if (_book.isbn.isNotEmpty) ...[
@@ -245,9 +289,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                           Text(
                             'Due: ${_book.dueDate!.day}/${_book.dueDate!.month}/${_book.dueDate!.year}',
                             style: const TextStyle(
-                              color: Color(0xFFFF9500),
-                              fontWeight: FontWeight.w600,
-                            ),
+                                color: Color(0xFFFF9500), fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -256,24 +298,17 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
                   if (_book.description.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    const Text(
-                      'About this book',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    const Text('About this book',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    Text(
-                      _book.description,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade700,
-                        height: 1.6,
-                      ),
-                    ),
+                    Text(_book.description,
+                        style: TextStyle(
+                            fontSize: 14, color: Colors.grey.shade700, height: 1.6)),
                   ],
 
                   const SizedBox(height: 32),
 
-                  // Action buttons
+                  // ── Action button ──
                   if (isCurrentBorrower)
                     _ActionButton(
                       label: 'Return Book',
@@ -282,34 +317,105 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                       onTap: _isLoading ? null : _handleReturn,
                       loading: _isLoading,
                     )
-                  else if (_book.status == BookStatus.available)
-                    _ActionButton(
-                      label: 'Borrow Book',
-                      icon: Icons.book_outlined,
-                      color: const Color(0xFF007AFF),
-                      onTap: _isLoading ? null : _handleBorrow,
-                      loading: _isLoading,
-                    )
-                  else if (_book.status == BookStatus.loaned)
-                    _ActionButton(
-                      label: 'Reserve Book',
-                      icon: Icons.bookmark_outline,
-                      color: const Color(0xFF34C759),
-                      onTap: _isLoading ? null : _handleReserve,
-                      loading: _isLoading,
-                    )
-                  else
+                  else if (_hasPendingRequest)
                     Container(
-                      padding: const EdgeInsets.all(14),
+                      width: double.infinity,
+                      height: 52,
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Center(
-                        child: Text('Already reserved',
-                            style: TextStyle(color: Colors.grey)),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.hourglass_top, size: 18, color: Colors.grey),
+                            SizedBox(width: 8),
+                            Text('Request pending approval',
+                                style: TextStyle(
+                                    color: Colors.grey, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                       ),
-                    ),
+                    )
+                  else if (_book.status == BookStatus.available)
+                      _ActionButton(
+                        label: 'Request to Borrow',
+                        icon: Icons.book_outlined,
+                        color: const Color(0xFF007AFF),
+                        onTap: _isLoading ? null : _handleRequestBorrow,
+                        loading: _isLoading,
+                      )
+                      else if (_book.status == BookStatus.loaned)
+                        // If the book is loaned but the current user already reserved it,
+                        // show a non-active reserved indicator instead of the Reserve button.
+                        _isReservedByUser
+                            ? Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    _reservationPosition != null
+                                        ? 'Reserved — you are #${_reservationPosition! + 1} of $_reservationCount'
+                                        : 'Already reserved',
+                                    style: const TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                              )
+                            : _ActionButton(
+                                label: 'Reserve Book',
+                                icon: Icons.bookmark_outline,
+                                color: const Color(0xFF34C759),
+                                onTap: _isLoading ? null : _handleReserve,
+                                loading: _isLoading,
+                              )
+                    else if (_book.status == BookStatus.reserved)
+                      // Reserved: show position or allow borrow if first reserver
+                      _book.status == BookStatus.reserved && _isReservedByUser && _reservationPosition == 0
+                          ? _ActionButton(
+                              label: 'Borrow Now',
+                              icon: Icons.book,
+                              color: const Color(0xFF007AFF),
+                              onTap: _isLoading ? null : _handleBorrowNow,
+                              loading: _isLoading,
+                            )
+                          : !_isReservedByUser
+                              ? _ActionButton(
+                                  label: 'Reserve Book',
+                                  icon: Icons.bookmark_outline,
+                                  color: const Color(0xFF34C759),
+                                  onTap: _isLoading ? null : _handleReserve,
+                                  loading: _isLoading,
+                                )
+                              : Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _reservationPosition != null
+                                          ? 'Reserved — you are #${_reservationPosition! + 1} of $_reservationCount'
+                                          : 'Already reserved',
+                                      style: const TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text('Action unavailable', style: TextStyle(color: Colors.grey)),
+                        ),
+                      ),
 
                   const SizedBox(height: 20),
                 ],
@@ -317,6 +423,48 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showReservationQueue() async {
+    final bookRef = FirebaseFirestore.instance.collection('Books').doc(_book.id);
+    final snap = await bookRef.collection('reservations').orderBy('reservedAt').get();
+    final docs = snap.docs;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Reservation Queue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (docs.isEmpty) const Text('No reservations'),
+            for (int i = 0; i < docs.length; i++)
+              ListTile(
+                leading: CircleAvatar(child: Text('${i + 1}')),
+                title: Text(docs[i].data()['userId'] ?? 'Unknown'),
+                trailing: FutureBuilder<bool>(
+                  future: _roleService.isCurrentUserAdmin(),
+                  builder: (ctx2, snap2) {
+                    if (snap2.data != true) return const SizedBox.shrink();
+                    return TextButton(
+                      onPressed: () async {
+                        Navigator.of(ctx).pop();
+                        await _bookService.assignBookToUser(_book.id, docs[i].data()['userId'].toString());
+                        await _reloadBook();
+                        await _loadReservations();
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Book assigned to user.')));
+                      },
+                      child: const Text('Assign'),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -352,11 +500,11 @@ class _ActionButton extends StatelessWidget {
         ),
         icon: loading
             ? const SizedBox(
-                width: 18, height: 18,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-              )
+            width: 18, height: 18,
+            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
             : Icon(icon, size: 20),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+        label: Text(label,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
       ),
     );
   }

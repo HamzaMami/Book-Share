@@ -25,9 +25,7 @@ class DatabaseService {
       );
 
       await _db.collection('Users').doc(uid).set(user.toFirestore());
-      print("User $uid created with role: ${role.value}");
     } catch (e) {
-      print("Error saving user: $e");
       rethrow;
     }
   }
@@ -46,7 +44,6 @@ class DatabaseService {
       }
       return null;
     } catch (e) {
-      print("Error fetching user data: $e");
       return null;
     }
   }

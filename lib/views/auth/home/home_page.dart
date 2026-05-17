@@ -1,7 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:bookshare/models/book.dart';
+import 'package:bookshare/services/book_service.dart';
+import 'package:bookshare/services/role_management_service.dart';
+import 'package:bookshare/views/books/book_detail_screen.dart';
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+class HomePage extends StatefulWidget {
+  final ValueChanged<String> onSearchBooks;
+  final VoidCallback onOpenBooks;
+  final VoidCallback onOpenMyLibrary;
+  final VoidCallback? onAddBook;
+
+  const HomePage({
+    super.key,
+    required this.onSearchBooks,
+    required this.onOpenBooks,
+    required this.onOpenMyLibrary,
+    this.onAddBook,
+  });
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final BookService _bookService = BookService();
+  final RoleManagementService _roleService = RoleManagementService();
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchSubmitted(String q) {
+    final query = q.trim();
+    if (query.isEmpty) return;
+    widget.onSearchBooks(query);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,12 +63,29 @@ class HomePage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           TextField(
+            controller: _searchController,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.search,
+            onSubmitted: _onSearchSubmitted,
             decoration: InputDecoration(
               hintText: 'Search books, authors, genres...',
-              prefixIcon: const Icon(Icons.search),
+              hintStyle: TextStyle(color: Colors.grey.shade500),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF007AFF)),
+              suffixIcon: IconButton(
+                onPressed: () {
+                  final query = _searchController.text.trim();
+                  if (query.isNotEmpty) {
+                    _onSearchSubmitted(query);
+                  } else {
+                    widget.onOpenBooks();
+                  }
+                },
+                icon: const Icon(Icons.arrow_forward_ios, size: 16),
+              ),
               filled: true,
               fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -45,24 +98,42 @@ class HomePage extends StatelessWidget {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _QuickActionCard(
-                  icon: Icons.bookmark_add_outlined,
-                  title: 'Add Book',
-                  subtitle: 'Save a new title',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _QuickActionCard(
-                  icon: Icons.menu_book_outlined,
-                  title: 'My Library',
-                  subtitle: 'View your books',
-                ),
-              ),
-            ],
+          FutureBuilder<bool>(
+            future: _roleService.isCurrentUserAdmin(),
+            builder: (context, snapshot) {
+              final isAdmin = snapshot.data == true;
+              return Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (isAdmin && widget.onAddBook != null) {
+                          widget.onAddBook!();
+                        } else {
+                          widget.onOpenBooks();
+                        }
+                      },
+                      child: _QuickActionCard(
+                        icon: isAdmin ? Icons.bookmark_add_outlined : Icons.search,
+                        title: isAdmin ? 'Add Book' : 'Browse Books',
+                        subtitle: isAdmin ? 'Save a new title' : 'Explore all titles',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: widget.onOpenMyLibrary,
+                      child: _QuickActionCard(
+                        icon: Icons.menu_book_outlined,
+                        title: 'My Library',
+                        subtitle: 'View your books',
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
           const Text(
@@ -70,19 +141,32 @@ class HomePage extends StatelessWidget {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
-          const _BookTile(
-            title: 'Atomic Habits',
-            author: 'James Clear',
-          ),
-          const SizedBox(height: 8),
-          const _BookTile(
-            title: 'Deep Work',
-            author: 'Cal Newport',
-          ),
-          const SizedBox(height: 8),
-          const _BookTile(
-            title: 'The Psychology of Money',
-            author: 'Morgan Housel',
+
+          // Featured books (show up to 5 recent books)
+          StreamBuilder<List<Book>>(
+            stream: _bookService.booksStream(),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              final books = (snap.data ?? []).take(5).toList();
+              if (books.isEmpty) return Center(child: Text('No featured books', style: TextStyle(color: Colors.grey.shade500)));
+              return Column(
+                children: books
+                    .map(
+                      (b) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: _BookTile(
+                          title: b.title,
+                          author: b.author,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => BookDetailScreen(book: b)),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
           ),
         ],
       ),
@@ -133,8 +217,9 @@ class _QuickActionCard extends StatelessWidget {
 class _BookTile extends StatelessWidget {
   final String title;
   final String author;
+  final VoidCallback onTap;
 
-  const _BookTile({required this.title, required this.author});
+  const _BookTile({required this.title, required this.author, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +237,7 @@ class _BookTile extends StatelessWidget {
         title: Text(title),
         subtitle: Text(author),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {},
+        onTap: onTap,
       ),
     );
   }

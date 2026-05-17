@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:bookshare/models/book.dart';
-import 'package:bookshare/services/Book_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:bookshare/services/book_service.dart';
 import 'package:bookshare/services/role_management_service.dart';
 import 'package:bookshare/views/books/book_detail_screen.dart';
 import 'package:bookshare/views/books/add_book_screen.dart';
 
 class BooksPage extends StatefulWidget {
-  const BooksPage({super.key});
+  final String initialSearchQuery;
+
+  const BooksPage({super.key, this.initialSearchQuery = ''});
 
   @override
   State<BooksPage> createState() => _BooksPageState();
+}
+
+Future<int> getReservationCount(String bookId) async {
+  try {
+    final snap = await FirebaseFirestore.instance.collection('Books').doc(bookId).collection('reservations').get();
+    return snap.docs.length;
+  } catch (_) {
+    return 0;
+  }
 }
 
 class _BooksPageState extends State<BooksPage> {
@@ -22,9 +34,25 @@ class _BooksPageState extends State<BooksPage> {
   final List<String> _filters = ['All', 'Available', 'Loaned', 'Reserved'];
 
   @override
+  void initState() {
+    super.initState();
+    _searchQuery = widget.initialSearchQuery;
+    _searchController.text = widget.initialSearchQuery;
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant BooksPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialSearchQuery != widget.initialSearchQuery) {
+      _searchQuery = widget.initialSearchQuery;
+      _searchController.text = widget.initialSearchQuery;
+    }
   }
 
   List<Book> _applyFilter(List<Book> books) {
@@ -56,10 +84,13 @@ class _BooksPageState extends State<BooksPage> {
                   // Search bar
                   TextField(
                     controller: _searchController,
+                    textInputAction: TextInputAction.search,
                     onChanged: (v) => setState(() => _searchQuery = v),
+                    onSubmitted: (v) => setState(() => _searchQuery = v.trim()),
                     decoration: InputDecoration(
                       hintText: 'Search by title, author, genre...',
-                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      hintStyle: TextStyle(color: Colors.grey.shade500),
+                      prefixIcon: const Icon(Icons.search, color: Color(0xFF007AFF)),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 18),
@@ -71,7 +102,8 @@ class _BooksPageState extends State<BooksPage> {
                           : null,
                       filled: true,
                       fillColor: const Color(0xFFF5F7FA),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -285,6 +317,23 @@ class _BookCard extends StatelessWidget {
                         style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
                       ),
                     ],
+                    const SizedBox(height: 8),
+                    // Reservation count indicator
+                    FutureBuilder<int>(
+                      future: getReservationCount(book.id),
+                      builder: (ctx, snap) {
+                        if (!snap.hasData || snap.data == 0) return const SizedBox.shrink();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text('${snap.data} reservations',
+                              style: TextStyle(fontSize: 12, color: Colors.orange.shade700)),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),

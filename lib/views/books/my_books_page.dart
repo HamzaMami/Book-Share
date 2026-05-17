@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:bookshare/models/book.dart';
-import 'package:bookshare/services/Book_service.dart';
+import 'package:bookshare/services/book_service.dart';
 import 'package:bookshare/views/books/book_detail_screen.dart';
 
 class MyBooksPage extends StatelessWidget {
